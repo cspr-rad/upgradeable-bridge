@@ -4,19 +4,25 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {MockUSDC} from "./mocks/MockUSDC.sol";
 import {USDCBridge} from "../src/USDCBridge.sol";
+import {MessageTransmitter} from "../src/MessageTransmitter.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract USDCBridgeTest is Test {
     MockUSDC public usdc;
     USDCBridge public usdcBridge;
+    MessageTransmitter public messageTransmitter;
     uint256 constant INITIAL_SUPPLY = 200_000_000_000;
 
     function setUp() public {
         usdc = new MockUSDC(INITIAL_SUPPLY);
+        messageTransmitter = new MessageTransmitter(0, address(0x01), 0, 2);
         address proxy = address(
             new ERC1967Proxy(
                 address(new USDCBridge()),
-                abi.encodeCall(USDCBridge.initialize, address(usdc))
+                abi.encodeCall(
+                    USDCBridge.initialize,
+                    (address(usdc), address(messageTransmitter))
+                )
             )
         );
         usdcBridge = USDCBridge(proxy);
@@ -24,7 +30,7 @@ contract USDCBridgeTest is Test {
 
     function testCantCallInitializeAgain() public {
         vm.expectRevert();
-        usdcBridge.initialize(address(usdc));
+        usdcBridge.initialize(address(usdc), address(messageTransmitter));
     }
 
     function testDeposit() public {
@@ -39,7 +45,7 @@ contract USDCBridgeTest is Test {
             "total value locked should be 0 after deposit"
         );
         usdc.approve(address(usdcBridge), 1);
-        usdcBridge.deposit(1);
+        usdcBridge.deposit(1, "foo");
         assertEq(
             usdc.balanceOf(address(usdcBridge)),
             1,
@@ -56,12 +62,12 @@ contract USDCBridgeTest is Test {
         usdcBridge.pause();
         usdc.approve(address(usdcBridge), 1);
         vm.expectRevert();
-        usdcBridge.deposit(1);
+        usdcBridge.deposit(1, "foo");
     }
 
     function testBurnLockedUSEDC() public {
         usdc.approve(address(usdcBridge), 1);
-        usdcBridge.deposit(1);
+        usdcBridge.deposit(1, "foo");
         assertEq(
             usdc.balanceOf(address(usdcBridge)),
             1,
